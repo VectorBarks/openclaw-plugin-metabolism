@@ -1,0 +1,49 @@
+{
+  "enabled": true,
+  
+  "thresholds": {
+    "entropyMinimum": 0.6,
+    "exchangeMinimum": 3,
+    "explicitMarkers": ["metabolize this", "think about this deeply", "what did you learn"],
+    "cooldownMinutes": 30
+  },
+  
+  "processing": {
+    "batchSize": 3,
+    "maxCandidatesPerCycle": 2,
+    "maxPendingCandidates": 50,
+    "heartbeatInterval": 1
+  },
+  
+  "llm": {
+    "model": "deepseek-v3.1:671b-cloud",
+    "temperature": 0.7,
+    "maxTokens": 800,
+    "timeoutMs": 30000
+  },
+  
+  "storage": {
+    "candidatesDir": "candidates",
+    "processedDir": "processed",
+    "growthVectorsPath": null
+  },
+  
+  "implications": {
+    "minimumCount": 1,
+    "maximumCount": 5,
+    "minimumLength": 30,
+    "filterPatterns": [
+      "implication",
+      "format:",
+      "note:",
+      "insight:",
+      "observation:"
+    ]
+  },
+  
+  "integration": {
+    "writeToStabilityVectors": true,
+    "emitKnowledgeGaps": true,
+    "emitProceduralLearnings": true
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "name": "openclaw-plugin-metabolism",
+  "version": "0.1.0",
+  "description": "Autonomous learning through conversation metabolism. Entropy-triggered candidate queuing, batch LLM processing, growth vector integration, and knowledge gap extraction.",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "keywords": [
+    "openclaw",
+    "plugin",
+    "metabolism",
+    "learning",
+    "autonomous",
+    "entropy"
+  ],
+  "author": "Chris Hunt & Clint",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "openclaw": {
+    "extensions": ["./index.js"]
+  },
+  "files": [
+    "index.js",
+    "openclaw.plugin.json",
+    "config.default.json",
+    "lib/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CoderofTheWest/openclaw-plugin-metabolism"
+  }
+}

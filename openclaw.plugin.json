@@ -1,0 +1,75 @@
+{
+  "id": "metabolism",
+  "name": "Metabolism — Autonomous Learning",
+  "description": "Entropy-triggered conversation metabolism with async LLM processing. Extracts implications, growth vectors, and knowledge gaps from high-entropy exchanges during heartbeat cycles.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable/disable the metabolism plugin"
+      },
+      "thresholds": {
+        "type": "object",
+        "description": "Candidate queuing thresholds",
+        "properties": {
+          "entropyMinimum": { "type": "number", "default": 0.6 },
+          "exchangeMinimum": { "type": "number", "default": 3 },
+          "explicitMarkers": { "type": "array", "items": { "type": "string" } },
+          "cooldownMinutes": { "type": "number", "default": 30 }
+        }
+      },
+      "processing": {
+        "type": "object",
+        "description": "Batch processing configuration",
+        "properties": {
+          "batchSize": { "type": "number", "default": 3 },
+          "maxCandidatesPerCycle": { "type": "number", "default": 2 },
+          "maxPendingCandidates": { "type": "number", "default": 50 },
+          "heartbeatInterval": { "type": "number", "default": 1 }
+        }
+      },
+      "llm": {
+        "type": "object",
+        "description": "LLM configuration for metabolism processing",
+        "properties": {
+          "model": { "type": "string", "default": "deepseek-v3.1:671b-cloud" },
+          "temperature": { "type": "number", "default": 0.7 },
+          "maxTokens": { "type": "number", "default": 800 },
+          "timeoutMs": { "type": "number", "default": 30000 }
+        }
+      },
+      "storage": {
+        "type": "object",
+        "description": "Storage paths",
+        "properties": {
+          "candidatesDir": { "type": "string", "default": "candidates" },
+          "processedDir": { "type": "string", "default": "processed" },
+          "growthVectorsPath": { "type": ["string", "null"], "default": null }
+        }
+      },
+      "implications": {
+        "type": "object",
+        "description": "Implication extraction configuration",
+        "properties": {
+          "minimumCount": { "type": "number", "default": 1 },
+          "maximumCount": { "type": "number", "default": 5 },
+          "minimumLength": { "type": "number", "default": 30 },
+          "filterPatterns": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "integration": {
+        "type": "object",
+        "description": "Integration with other plugins",
+        "properties": {
+          "writeToStabilityVectors": { "type": "boolean", "default": true },
+          "emitKnowledgeGaps": { "type": "boolean", "default": true },
+          "emitProceduralLearnings": { "type": "boolean", "default": true }
+        }
+      }
+    }
+  }
+}
