@@ -1,5 +1,5 @@
 {
-  "name": "openclaw-plugin-metabolism",
+  "name": "metabolism",
   "version": "0.1.0",
   "description": "Autonomous learning through conversation metabolism. Entropy-triggered candidate queuing, batch LLM processing, growth vector integration, and knowledge gap extraction.",
   "main": "index.js",
