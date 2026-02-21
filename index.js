@@ -57,7 +57,7 @@ function ensureDir(dirPath) {
 // ---------------------------------------------------------------------------
 
 module.exports = {
-    id: 'metabolism',
+    id: 'openclaw-plugin-metabolism',
     name: 'Metabolism — Autonomous Learning',
 
     configSchema: {
