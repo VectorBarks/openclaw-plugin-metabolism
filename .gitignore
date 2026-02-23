@@ -1,23 +1,28 @@
-# Dependencies
-node_modules/
+# Local config — contains private paths, model names, endpoints
+config.json
 
-# Runtime data (plugin-local state)
+# Runtime data — conversation history, growth vectors, entities, logs
 data/
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Editor files
-*.swp
-*.swo
-*~
-.vscode/
-.idea/
-
-# Logs
 *.log
 
-# Environment
+# Secrets and environment
 .env
 .env.*
+*.key
+*.secret
+*credentials*
+*api_key*
+
+# Node
+node_modules/
+package-lock.json
+
+# macOS
+.DS_Store
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+
