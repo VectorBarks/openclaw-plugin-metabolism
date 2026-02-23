@@ -1,0 +1,55 @@
+{
+  "enabled": true,
+  "thresholds": {
+    "entropyMinimum": 0.5,
+    "exchangeMinimum": 3,
+    "explicitMarkers": [
+      "merk dir das",
+      "metabolize this",
+      "denk mal dr\u00fcber nach",
+      "think about this deeply",
+      "was hast du gelernt",
+      "what did you learn",
+      "das ist wichtig",
+      "behalt das im kopf",
+      "metabolisier das"
+    ],
+    "cooldownMinutes": 30
+  },
+  "processing": {
+    "batchSize": 3,
+    "maxCandidatesPerCycle": 2,
+    "maxPendingCandidates": 50,
+    "heartbeatInterval": 1
+  },
+  "llm": {
+    "model": "/Users/saphira/mlx-models/GLM-4.7-Flash-MLX-4bit",
+    "temperature": 0.7,
+    "maxTokens": 2000,
+    "timeoutMs": 30000,
+    "baseUrl": "http://localhost:8080",
+    "max_tokens": 2000
+  },
+  "storage": {
+    "candidatesDir": "candidates",
+    "processedDir": "processed",
+    "growthVectorsPath": null
+  },
+  "implications": {
+    "minimumCount": 1,
+    "maximumCount": 5,
+    "minimumLength": 30,
+    "filterPatterns": [
+      "implication",
+      "format:",
+      "note:",
+      "insight:",
+      "observation:"
+    ]
+  },
+  "integration": {
+    "writeToStabilityVectors": true,
+    "emitKnowledgeGaps": true,
+    "emitProceduralLearnings": true
+  }
+}
