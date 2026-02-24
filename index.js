@@ -300,39 +300,54 @@ module.exports = {
         // HOOK: heartbeat — SLOW PATH: Process pending candidates
         // -------------------------------------------------------------------
 
+        // -------------------------------------------------------------------
+        // HOOK: heartbeat — SLOW PATH: Process pending candidates
+        // -------------------------------------------------------------------
+
+        // Global lock to prevent concurrent heartbeat processing across all agents
+        let globalProcessing = false;
+
         api.on('heartbeat', async (event, ctx) => {
-            // Scan ALL agent directories for pending candidates, not just current agent
-            // This ensures metabolism processes candidates even when heartbeat comes to 'main'
-            const agentsDir = path.join(baseDataDir, 'agents');
-            const agentIds = fs.existsSync(agentsDir) 
-                ? fs.readdirSync(agentsDir, { withFileTypes: true })
-                    .filter(d => d.isDirectory())
-                    .map(d => d.name)
-                : [];
-            
-            // Also check main/default directory
-            if (fs.existsSync(path.join(baseDataDir, 'candidates'))) {
-                agentIds.unshift('main');
+            // Global lock check - only one heartbeat handler can run at a time
+            if (globalProcessing) {
+                api.logger.debug('[Metabolism] Skipping heartbeat - global processing in progress');
+                return;
             }
+            globalProcessing = true;
 
-            for (const agentId of agentIds) {
-                const state = getAgentState(agentId);
-
-                // Skip if already processing this agent
-                if (state.isProcessing) {
-                    continue;
+            try {
+                // Scan ALL agent directories for pending candidates, not just current agent
+                // This ensures metabolism processes candidates even when heartbeat comes to 'main'
+                const agentsDir = path.join(baseDataDir, 'agents');
+                const agentIds = fs.existsSync(agentsDir) 
+                    ? fs.readdirSync(agentsDir, { withFileTypes: true })
+                        .filter(d => d.isDirectory())
+                        .map(d => d.name)
+                    : [];
+                
+                // Also check main/default directory
+                if (fs.existsSync(path.join(baseDataDir, 'candidates'))) {
+                    agentIds.unshift('main');
                 }
 
-                // Get pending candidates
-                const batchSize = config.processing?.batchSize || 3;
-                const candidates = state.candidateStore.getPending(batchSize);
+                for (const agentId of agentIds) {
+                    const state = getAgentState(agentId);
 
-                if (candidates.length === 0) {
-                    continue; // Nothing to process for this agent
-                }
+                    // Skip if already processing this agent
+                    if (state.isProcessing) {
+                        continue;
+                    }
 
-                // Set processing lock
-                state.isProcessing = true;
+                    // Get pending candidates
+                    const batchSize = config.processing?.batchSize || 3;
+                    const candidates = state.candidateStore.getPending(batchSize);
+
+                    if (candidates.length === 0) {
+                        continue; // Nothing to process for this agent
+                    }
+
+                    // Set processing lock
+                    state.isProcessing = true;
 
                 try {
                     api.logger.info(`[Metabolism:${agentId}] Processing ${candidates.length} candidate(s)`);
@@ -383,6 +398,9 @@ module.exports = {
                     state.isProcessing = false;
                 }
             } // end for each agent
+            } finally {
+                globalProcessing = false;
+            }
         });
 
         // -------------------------------------------------------------------
