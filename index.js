@@ -214,7 +214,7 @@ module.exports = {
             if (Array.isArray(msg.content)) {
                 return msg.content.map(c => c.text || c.content || '').join(' ');
             }
-            return String(msg.content || '');
+            return String(msg.reasoning || msg.content || '');
         }
 
         // -------------------------------------------------------------------
