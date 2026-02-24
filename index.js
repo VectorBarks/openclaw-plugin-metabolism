@@ -301,73 +301,88 @@ module.exports = {
         // -------------------------------------------------------------------
 
         api.on('heartbeat', async (event, ctx) => {
-            const state = getAgentState(ctx.agentId);
-
-            // Skip if already processing
-            if (state.isProcessing) {
-                api.logger.debug(`[Metabolism:${state.agentId}] Skipping heartbeat - already processing`);
-                return;
+            // Scan ALL agent directories for pending candidates, not just current agent
+            // This ensures metabolism processes candidates even when heartbeat comes to 'main'
+            const agentsDir = path.join(baseDataDir, 'agents');
+            const agentIds = fs.existsSync(agentsDir) 
+                ? fs.readdirSync(agentsDir, { withFileTypes: true })
+                    .filter(d => d.isDirectory())
+                    .map(d => d.name)
+                : [];
+            
+            // Also check main/default directory
+            if (fs.existsSync(path.join(baseDataDir, 'candidates'))) {
+                agentIds.unshift('main');
             }
 
-            // Get pending candidates
-            const batchSize = config.processing?.batchSize || 3;
-            const candidates = state.candidateStore.getPending(batchSize);
+            for (const agentId of agentIds) {
+                const state = getAgentState(agentId);
 
-            if (candidates.length === 0) {
-                return; // Nothing to process
-            }
+                // Skip if already processing this agent
+                if (state.isProcessing) {
+                    continue;
+                }
 
-            // Set processing lock
-            state.isProcessing = true;
+                // Get pending candidates
+                const batchSize = config.processing?.batchSize || 3;
+                const candidates = state.candidateStore.getPending(batchSize);
 
-            try {
-                api.logger.info(`[Metabolism:${state.agentId}] Processing ${candidates.length} candidate(s)`);
+                if (candidates.length === 0) {
+                    continue; // Nothing to process for this agent
+                }
 
-                // Process batch through LLM
-                const results = await state.processor.processBatch(candidates);
+                // Set processing lock
+                state.isProcessing = true;
 
-                // Handle results
-                if (results.implications.length > 0) {
-                    api.logger.info(
-                        `[Metabolism:${state.agentId}] Extracted ${results.implications.length} implications, ` +
-                        `${results.growthVectors.length} growth vectors, ${results.gaps.length} gaps`
-                    );
+                try {
+                    api.logger.info(`[Metabolism:${agentId}] Processing ${candidates.length} candidate(s)`);
 
-                    // Write growth vectors to stability plugin
-                    if (config.integration?.writeToStabilityVectors && results.growthVectors.length > 0) {
-                        const written = state.writeGrowthVectors(results.growthVectors);
-                        if (written) {
-                            api.logger.info(`[Metabolism:${state.agentId}] Wrote ${results.growthVectors.length} growth vector candidate(s)`);
-                        }
-                    }
+                    // Process batch through LLM
+                    const results = await state.processor.processBatch(candidates);
 
-                    // Emit knowledge gaps to subscribed plugins (contemplation, etc.)
-                    if (config.integration?.emitKnowledgeGaps && results.gaps.length > 0) {
+                    // Handle results
+                    if (results.implications.length > 0) {
                         api.logger.info(
-                            `[Metabolism:${state.agentId}] Emitting ${results.gaps.length} gap(s) to ${gapListeners.length} listener(s)`
+                            `[Metabolism:${agentId}] Extracted ${results.implications.length} implications, ` +
+                            `${results.growthVectors.length} growth vectors, ${results.gaps.length} gaps`
                         );
-                        for (const listener of gapListeners) {
-                            try {
-                                listener(results.gaps, ctx.agentId);
-                            } catch (e) {
-                                api.logger.warn(`[Metabolism:${state.agentId}] Gap listener error:`, e.message);
+
+                        // Write growth vectors to stability plugin
+                        if (config.integration?.writeToStabilityVectors && results.growthVectors.length > 0) {
+                            const written = state.writeGrowthVectors(results.growthVectors);
+                            if (written) {
+                                api.logger.info(`[Metabolism:${agentId}] Wrote ${results.growthVectors.length} growth vector candidate(s)`);
+                            }
+                        }
+
+                        // Emit knowledge gaps to subscribed plugins (contemplation, etc.)
+                        if (config.integration?.emitKnowledgeGaps && results.gaps.length > 0) {
+                            api.logger.info(
+                                `[Metabolism:${agentId}] Emitting ${results.gaps.length} gap(s) to ${gapListeners.length} listener(s)`
+                            );
+                            for (const listener of gapListeners) {
+                                try {
+                                    listener(results.gaps, agentId);
+                                } catch (e) {
+                                    api.logger.warn(`[Metabolism:${agentId}] Gap listener error:`, e.message);
+                                }
                             }
                         }
                     }
-                }
 
-                // Mark processed
-                for (const candidate of candidates) {
-                    state.candidateStore.markProcessed(candidate.id, {
-                        implications: results.processed.find(p => p.id === candidate.id)?.implicationCount || 0
-                    });
-                }
+                    // Mark processed
+                    for (const candidate of candidates) {
+                        state.candidateStore.markProcessed(candidate.id, {
+                            implications: results.processed.find(p => p.id === candidate.id)?.implicationCount || 0
+                        });
+                    }
 
-            } catch (error) {
-                api.logger.error(`[Metabolism:${state.agentId}] Processing error:`, error.message);
-            } finally {
-                state.isProcessing = false;
-            }
+                } catch (error) {
+                    api.logger.error(`[Metabolism:${agentId}] Processing error:`, error.message);
+                } finally {
+                    state.isProcessing = false;
+                }
+            } // end for each agent
         });
 
         // -------------------------------------------------------------------
