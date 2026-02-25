@@ -11,8 +11,8 @@
  * - Knowledge gap extraction for future contemplative inquiry
  *
  * Architecture:
- * - FAST PATH: Write candidate file on high-entropy exchanges (synchronous)
- * - SLOW PATH: Process candidates through LLM during heartbeat (asynchronous)
+ * - FAST PATH: Write candidate file on high-entropy exchanges (agent_end hook, <5ms)
+ * - SLOW PATH: Process candidates through LLM on agent_end (throttled to 15min, async)
  * - INTEGRATION: Write growth vectors to stability plugin's growth-vectors.json
  *
  * Multi-agent: All state scoped per agent via ctx.agentId.
@@ -174,9 +174,12 @@ module.exports = {
                         }
                     }
 
-                    // Add new candidates
+                    // Add new candidates with agent scoping
                     for (const v of vectors) {
                         existing.candidates = existing.candidates || [];
+                        // Tag with agentId and scope for multi-agent isolation
+                        if (!v.agentId) v.agentId = this.agentId;
+                        if (!v.scope) v.scope = 'agent';
                         existing.candidates.push(v);
                     }
 
@@ -297,20 +300,34 @@ module.exports = {
         });
 
         // -------------------------------------------------------------------
-        // HOOK: heartbeat — SLOW PATH: Process pending candidates
         // -------------------------------------------------------------------
+        // HOOK: agent_end — SLOW PATH: Process pending candidates (throttled)
+        // -------------------------------------------------------------------
+        // Changed from 'heartbeat' to 'agent_end' with 15min cooldown.
+        // OpenClaw doesn't reliably fire 'heartbeat' events, so we use agent_end
+        // but throttle processing to avoid LLM calls on every turn.
 
-        // -------------------------------------------------------------------
-        // HOOK: heartbeat — SLOW PATH: Process pending candidates
-        // -------------------------------------------------------------------
-
-        // Global lock to prevent concurrent heartbeat processing across all agents
+        // Global lock to prevent concurrent processing across all agents
         let globalProcessing = false;
+        let lastProcessingTime = 0;
+        const PROCESSING_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes
 
-        api.on('heartbeat', async (event, ctx) => {
-            // Global lock check - only one heartbeat handler can run at a time
+        api.on('agent_end', async (event, ctx) => {
+            // Skip heartbeat-originated turns (avoid double-processing)
+            if (event.metadata?.isHeartbeat) {
+                return;
+            }
+
+            // Cooldown check - only process every 15min
+            const timeSinceLastProcessing = Date.now() - lastProcessingTime;
+            if (timeSinceLastProcessing < PROCESSING_COOLDOWN_MS) {
+                api.logger.debug(`[Metabolism] Skipping processing - cooldown (${Math.round(timeSinceLastProcessing/1000)}s < 900s)`);
+                return;
+            }
+
+            // Global lock check - only one handler can run at a time
             if (globalProcessing) {
-                api.logger.debug('[Metabolism] Skipping heartbeat - global processing in progress');
+                api.logger.debug('[Metabolism] Skipping - global processing in progress');
                 return;
             }
             globalProcessing = true;
@@ -398,6 +415,9 @@ module.exports = {
                     state.isProcessing = false;
                 }
             } // end for each agent
+            
+            // Update last processing time only on success
+            lastProcessingTime = Date.now();
             } finally {
                 globalProcessing = false;
             }
