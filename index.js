@@ -119,28 +119,59 @@ module.exports = {
                 this.candidateStore = new CandidateStore(config, this.dataDir);
                 this.processor = new MetabolismProcessor(config, this.dataDir);
 
-                // Cooldown tracking (by userId)
-                this.lastMetabolismByUser = new Map();
+                // Cooldown tracking: FILE-BASED to survive restarts and dual-instance
+                this.cooldownFile = path.join(this.dataDir, '.cooldown.json');
 
                 // Processing lock (prevent concurrent heartbeat processing)
                 this.isProcessing = false;
             }
 
             /**
-             * Check if user is in cooldown.
+             * Load cooldown state from file (shared across all gateway instances).
+             */
+            _loadCooldowns() {
+                try {
+                    if (fs.existsSync(this.cooldownFile)) {
+                        return JSON.parse(fs.readFileSync(this.cooldownFile, 'utf8'));
+                    }
+                } catch (e) { /* corrupted, start fresh */ }
+                return {};
+            }
+
+            /**
+             * Save cooldown state to file.
+             */
+            _saveCooldowns(data) {
+                try {
+                    fs.writeFileSync(this.cooldownFile, JSON.stringify(data));
+                } catch (e) {
+                    api.logger.error(`[Metabolism:${this.agentId}] Failed to write cooldown file:`, e.message);
+                }
+            }
+
+            /**
+             * Check if user is in cooldown (file-based, cross-instance safe).
              */
             isInCooldown(userId) {
-                const last = this.lastMetabolismByUser.get(userId);
+                const data = this._loadCooldowns();
+                const last = data[userId];
                 if (!last) return false;
-                const cooldownMs = (config.thresholds?.cooldownMinutes || 30) * 60 * 1000;
+                const cooldownMs = (config.thresholds?.cooldownMinutes || 60) * 60 * 1000;
                 return (Date.now() - last) < cooldownMs;
             }
 
             /**
-             * Mark user as metabolized.
+             * Mark user as metabolized (file-based, cross-instance safe).
              */
             markMetabolized(userId) {
-                this.lastMetabolismByUser.set(userId, Date.now());
+                const data = this._loadCooldowns();
+                data[userId] = Date.now();
+                // Prune entries older than 24h
+                const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+                for (const [k, v] of Object.entries(data)) {
+                    if (v < cutoff) delete data[k];
+                }
+                this._saveCooldowns(data);
             }
 
             /**
@@ -255,12 +286,18 @@ module.exports = {
             const userText = extractText(lastUser);
 
             // Check thresholds
-            const entropyMinimum = config.thresholds?.entropyMinimum || 0.6;
-            const exchangeMinimum = config.thresholds?.exchangeMinimum || 3;
+            const entropyMinimum = config.thresholds?.entropyMinimum || 0.8;
+            const exchangeMinimum = config.thresholds?.exchangeMinimum || 20;
             const explicitMarkers = config.thresholds?.explicitMarkers || [];
 
+            // Count actual user-assistant EXCHANGES (pairs), not raw message count.
+            // messages.length counts ALL messages in the session (can be 600+),
+            // which always exceeds any reasonable threshold.
+            const userMessages = messages.filter(m => m?.role === 'user').length;
+            const exchangeCount = userMessages; // Each user message = 1 exchange
+
             const isHighEntropy = entropy >= entropyMinimum;
-            const isLongExchange = messages.length >= exchangeMinimum;
+            const isLongExchange = exchangeCount >= exchangeMinimum;
             const hasExplicitMarker = explicitMarkers.some(m =>
                 userText.toLowerCase().includes(m.toLowerCase())
             );
@@ -274,10 +311,13 @@ module.exports = {
             if (!shouldQueue) {
                 api.logger.debug(
                     `[Metabolism:${state.agentId}] Skipping candidate (entropy: ${entropy.toFixed(2)}, ` +
-                    `exchanges: ${messages.length}, explicit: ${hasExplicitMarker}, cooldown: ${inCooldown})`
+                    `exchanges: ${exchangeCount}/${exchangeMinimum}, explicit: ${hasExplicitMarker}, cooldown: ${inCooldown})`
                 );
                 return;
             }
+
+            // Mark cooldown BEFORE writing (file-based, cross-instance safe)
+            state.markMetabolized(userId);
 
             // FAST PATH: Write candidate file
             const candidateId = state.candidateStore.write({
@@ -296,7 +336,7 @@ module.exports = {
 
             api.logger.info(
                 `[Metabolism:${state.agentId}] Queued candidate ${candidateId} ` +
-                `(entropy: ${entropy.toFixed(2)}, exchanges: ${messages.length})`
+                `(entropy: ${entropy.toFixed(2)}, exchanges: ${exchangeCount}, reason: ${hasExplicitMarker ? 'explicit' : 'threshold'})`
             );
         });
 
