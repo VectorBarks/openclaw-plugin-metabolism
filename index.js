@@ -268,7 +268,8 @@ module.exports = {
             // Check cooldown
             const inCooldown = state.isInCooldown(userId);
 
-            const shouldQueue = (isHighEntropy || isLongExchange || hasExplicitMarker) && !inCooldown;
+            // Explicit markers bypass cooldown; entropy/length do not
+            const shouldQueue = hasExplicitMarker || ((isHighEntropy || isLongExchange) && !inCooldown);
 
             if (!shouldQueue) {
                 api.logger.debug(
