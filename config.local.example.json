@@ -1,0 +1,9 @@
+{
+  "_comment": "Private overrides for metabolism plugin. Copy to config.local.json and customize.",
+  "llm": {
+    "model": "your-model-name"
+  },
+  "thresholds": {
+    "minSignificance": 0.6
+  }
+}
